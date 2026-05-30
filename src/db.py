@@ -177,11 +177,27 @@ _engine = None
 
 
 def get_engine():
-    """Return a process-wide SQLAlchemy engine, creating it on first use."""
+    """Return a process-wide SQLAlchemy engine, creating it on first use.
+
+    The engine is built from DATABASE_URL (config picks SQLite locally, or the
+    DATABASE_URL database -- e.g. Supabase Postgres -- when that env var is set),
+    so the rest of the app is unaware of which backend it is talking to.
+    """
     global _engine
     if _engine is None:
         _engine = create_engine(DATABASE_URL, future=True)
     return _engine
+
+
+def database_kind(engine=None):
+    """Return a friendly name for the active backend: "sqlite" or "postgres".
+
+    Derived from the engine's dialect, so it never reads, exposes, or logs the
+    connection string or password.
+    """
+    engine = engine or get_engine()
+    name = engine.dialect.name
+    return "postgres" if name == "postgresql" else name
 
 
 def init_db(engine=None):

@@ -4,10 +4,12 @@ name: Manual smoke test
 # ever runs when a human triggers it by hand from the Actions tab
 # (workflow_dispatch). It never runs on push, pull request, or a schedule.
 #
-# The ingestion writes to a throwaway SQLite database created fresh on the
-# GitHub Actions runner (init_db builds the schema from scratch). That file
-# lives only for the duration of this run and is discarded when the runner is
-# torn down — nothing is persisted back to the repo or any external store.
+# Where the data lands depends on the DATABASE_URL secret:
+#   - set (Supabase Postgres URL): ingestion writes to Supabase, and init_db
+#     creates the schema there on first run. Those rows persist.
+#   - absent: ingestion falls back to a throwaway SQLite file created fresh on
+#     the runner (init_db builds the schema from scratch). That file lives only
+#     for the duration of the run and is discarded when the runner is torn down.
 on:
   workflow_dispatch:
 
@@ -27,10 +29,23 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Check database connection
+        # Reports which backend we're about to write to before any ingestion.
+        # With DATABASE_URL set to the Supabase URL this prints "Database type:
+        # postgres"; without it, "sqlite". The URL and password are never printed.
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m src.ingestion.check_db_connection
+
       - name: Run live smoke test
-        # TMDB_API_KEY is read from the repository secret of the same name and
-        # injected into the environment for this step only. GitHub masks the
-        # value in logs; the code reads it via os.getenv and never prints it.
+        # Hits the live TMDb API and writes the results to the database.
+        #   - TMDB_API_KEY: TMDb credential, required for the live pull.
+        #   - DATABASE_URL: when set to the Supabase Postgres URL, ingestion
+        #     writes to Supabase; when absent it falls back to an ephemeral
+        #     SQLite file on the runner.
+        # Both secrets are injected for this step only. GitHub masks the values
+        # in logs, and the code reads them via os.getenv and never prints them.
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m src.ingestion.run_smoke_test
