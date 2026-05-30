@@ -1,0 +1,46 @@
+name: Weekly ingestion
+
+# Discovery-driven ingestion into Supabase, run automatically once a week and
+# on demand. It pulls fresh candidate movie ids from TMDb discovery and runs
+# each through the full pipeline (details -> raw -> transform -> upsert ->
+# enrichment -> weekly snapshot), writing to the Supabase Postgres database via
+# DATABASE_URL. Per-movie error isolation means one bad movie won't fail the run.
+on:
+  workflow_dispatch:
+  schedule:
+    # Monday 10:00 UTC -- a quiet off-peak slot. Runs once per week.
+    - cron: "0 10 * * 1"
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    # Both secrets are injected for every step in this job. GitHub masks their
+    # values in logs, and the code reads them via os.getenv and never prints them.
+    #   - TMDB_API_KEY: TMDb credential for the live pulls.
+    #   - DATABASE_URL: Supabase Postgres URL; when set, ingestion writes there.
+    env:
+      TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check database connection
+        # Confirms the run is pointed at Supabase ("Database type: postgres")
+        # and creates the schema if it does not exist yet. Prints per-table row
+        # counts only -- never the URL or password.
+        run: python -m src.ingestion.check_db_connection
+
+      - name: Run discovery-driven ingestion
+        # Discovers up to 20 movie ids (the module default) and ingests each into
+        # Supabase. One movie's failure does not stop the rest.
+        run: python -m src.ingestion.run_discovered_ingestion
