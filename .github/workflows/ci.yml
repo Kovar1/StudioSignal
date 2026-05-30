@@ -1,0 +1,27 @@
+name: CI
+
+# Continuous integration: run the test suite on every push and pull request.
+# This job is fully offline — it never sets TMDB_API_KEY and never makes a live
+# TMDb call. The pytest suite mocks the network, so no secret is required here.
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run pytest
+        run: pytest

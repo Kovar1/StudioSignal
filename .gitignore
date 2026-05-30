@@ -1,0 +1,13 @@
+# Secrets and local config
+.env
+
+# Local database
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
